@@ -1,5 +1,4 @@
-# My Django blog — learning notes
-
+# Django Blog Project
 I'm building this project step by step. So far, I created the blog models, connected them, and fixed some import and migration errors.
 
 ## Organizing the models
