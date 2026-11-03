@@ -1,99 +1,804 @@
-# Django Blog Project
-I'm building this project step by step. So far, I created the blog models, connected them, and fixed some import and migration errors.
+# Django Blog Project – Simple Review
 
-## Organizing the models
+This project is a Blog Backend built with Django and Django REST Framework.
 
-I put each model in its own file inside `blog/models/`:
+The main idea is:
 
-- `user.py` — user information.
-- `post.py` — post title, content, author, and categories.
-- `comment.py` — comment content, post, and author.
-- `category.py` — category name and description.
-
-`__init__.py` imports these models so Django can find them.
-
-## Fields I used
-
-- `CharField(max_length=100)` — short text with a maximum length, like a title.
-- `TextField()` — longer text, like post content.
-- `EmailField()` — an email field that checks the format during validation.
-- `unique=True` — prevents duplicate values, like two users with the same username.
-- `AutoField(primary_key=True)` — an automatically generated ID.
-- `auto_now_add=True` — saves the creation time.
-- `auto_now=True` — updates the time when the object is saved.
-- `__str__()` — shows a readable name for the object, like the post title.
-
-## Relationships
-
-### Users and posts
-
-In `Post`, I used:
-
-```python
-author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts', blank=True, null=True)
+```text
+Client / Postman
+       ↓
+URL
+       ↓
+View
+       ↓
+Serializer
+       ↓
+Model
+       ↓
+Database
 ```
 
-One user can write many posts. Each post points to one user, or can have no author with the current settings.
+When returning data:
 
-`related_name='posts'` lets me get a user's posts with `user.posts.all()`.
-
-### Comments
-
-In `Comment`, I used foreign keys for `post` and `author`. A post can have many comments, and a user can write many comments.
-
-`on_delete=models.CASCADE` means deleting the linked object also deletes the objects pointing to it. For example, deleting a post deletes its comments.
-
-### Posts and categories
-
-In `Post`, I used:
-
-```python
-catagories = models.ManyToManyField(Category, related_name='posts', blank=True)
+```text
+Database
+↓
+Model
+↓
+Serializer
+↓
+Response / JSON
 ```
 
-A post can have many categories, and a category can have many posts. This is a many-to-many relationship.
+## 1. Project and App
 
-`catagories` is how the field is currently spelled in my code.
+I have a Django project called:
 
-## `blank=True` and `null=True`
-
-- `blank=True` — the field can be left empty in a form.
-- `null=True` — the database can store no value (`NULL`) for the field.
-
-I used both for optional foreign keys. The comment's `post` and `author` currently allow empty values.
-
-For categories, `blank=True` allows a post to have no categories. A many-to-many field doesn't need `null=True`.
-
-## Import error
-
-I tried:
-
-```python
-from models import User, Category
+```text
+config
 ```
 
-It failed because `models` is inside `blog`, not at the project root.
+It contains the main project configuration, such as:
 
-Inside `post.py`, I fixed it with:
-
-```python
-from .user import User
-from .category import Category
+```text
+settings.py
+urls.py
 ```
 
-The dot means the same package. Adding `__init__.py` doesn't make `models` a top-level package.
+I also have an app called:
 
-## Migration error
+```text
+blog
+```
 
-When I added the required `author` field, Django asked for a default to fill it for existing comments.
+The `blog` app contains the main blog logic:
 
-`blank=True` alone didn't help because it doesn't allow `NULL` in the database. I added `null=True` to allow the relationship to be empty.
+```text
+models
+serializers
+views
+urls
+```
 
-If I want the author to be required, I need to give existing comments an author instead. A one-off default would be an existing user's ID.
+Simple way to remember it:
+
+```text
+config = whole-project configuration
+blog   = blog feature
+```
+
+## 2. settings.py
+
+`settings.py` contains the main Django configuration.
+
+One important section is:
+
+```python
+INSTALLED_APPS
+```
+
+For example:
+
+```python
+'rest_framework',
+'blog',
+```
+
+`rest_framework` is needed because we are building REST APIs with Django REST Framework.
+
+The project also connects to PostgreSQL.
+
+Sensitive information such as database passwords should not be written directly inside `settings.py`.
+
+Instead, they can be stored in:
+
+```text
+.env
+```
+
+and loaded using `python-decouple`.
+
+## 3. URLs
+
+There are two URL levels.
+
+The first one is:
+
+```text
+config/urls.py
+```
+
+This is the main router for the whole Django project.
+
+For example:
+
+```python
+path('api/', include('blog.urls'))
+```
+
+This means:
+
+> If the URL starts with `/api/`, send the remaining part to `blog/urls.py`.
+
+Then inside `blog/urls.py`, I can have:
+
+```python
+path('users/', create_user)
+```
+
+So the final URL becomes:
+
+```text
+/api/users/
+```
+
+Simple way to remember:
+
+```text
+config/urls.py
+= chooses the app
+
+blog/urls.py
+= chooses the view
+```
+
+## 4. Models
+
+A Model represents data stored in the database.
+
+For example:
+
+```python
+class Category(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField()
+```
+
+This represents something similar to:
+
+```text
+Category table
+
+id
+name
+description
+```
+
+Django handles the SQL for us through the ORM.
+
+## 5. Models in the project
+
+The project contains:
+
+```text
+User
+Post
+Category
+Comment
+```
+
+They are organized into separate files:
+
+```text
+blog/models/
+    user.py
+    post.py
+    category.py
+    comment.py
+```
+
+`__init__.py` imports the models so Django can find and use them.
+
+## 6. Common Model Fields
+
+```python
+models.CharField(max_length=100)
+```
+
+Used for short text such as a username or title.
+
+```python
+models.TextField()
+```
+
+Used for longer text such as post content or comments.
+
+```python
+models.EmailField()
+```
+
+Used for email addresses and provides email-format validation.
+
+```python
+models.DateTimeField(auto_now_add=True)
+```
+
+Stores the creation time.
+
+```python
+models.DateTimeField(auto_now=True)
+```
+
+Updates the timestamp whenever the object is saved.
+
+```python
+unique=True
+```
+
+Prevents duplicate values.
+
+For example:
+
+```python
+username = models.CharField(
+    max_length=100,
+    unique=True
+)
+```
+
+Two users cannot have the same username.
+
+## 7. ForeignKey Relationships
+
+For example, a Post can have an author:
+
+```python
+author = models.ForeignKey(
+    User,
+    on_delete=models.CASCADE,
+    related_name='posts'
+)
+```
+
+This means:
+
+```text
+One User
+↓
+Many Posts
+```
+
+Each Post points to one User.
+
+`related_name='posts'` allows:
+
+```python
+user.posts.all()
+```
+
+which returns the user's posts.
+
+`on_delete=models.CASCADE` means related objects can be deleted when the referenced object is deleted.
+
+For example, deleting a Post can delete its related Comments if the Comment uses `CASCADE`.
+
+## 8. ManyToMany Relationship
+
+A Post can belong to several Categories.
+
+For example:
+
+```python
+categories = models.ManyToManyField(
+    Category,
+    related_name='posts',
+    blank=True
+)
+```
+
+This means:
+
+```text
+One Post
+→ Many Categories
+
+One Category
+→ Many Posts
+```
+
+Example:
+
+```text
+Post: Django REST Framework
+
+Categories:
+Python
+Backend
+Technology
+```
+
+Django creates an intermediate relationship table automatically.
+
+## 9. blank=True and null=True
+
+```python
+blank=True
+```
+
+Means the field can be empty during validation or in forms.
+
+```python
+null=True
+```
+
+Means the database is allowed to store:
+
+```text
+NULL
+```
+
+For a ManyToManyField, normally `blank=True` is enough. `null=True` is not needed.
+
+## 10. Migrations
+
+When I change a Model, the database does not change automatically.
+
+First:
 
 ```bash
 python manage.py makemigrations
+```
+
+This creates migration instructions.
+
+Then:
+
+```bash
 python manage.py migrate
 ```
 
-`makemigrations` creates the database change instructions. `migrate` applies them.
+This applies those changes to the database.
+
+The flow is:
+
+```text
+Model change
+↓
+makemigrations
+↓
+Migration file
+↓
+migrate
+↓
+Database change
+```
+
+This matches the course material, which explains migrations as the safe way to apply model/schema changes to the database.
+
+## 11. Django ORM
+
+The Django ORM lets me work with the database using Python instead of writing SQL directly.
+
+For example:
+
+```python
+Post.objects.all()
+```
+
+means:
+
+```text
+Get all Posts
+```
+
+And:
+
+```python
+Post.objects.get(id=1)
+```
+
+means:
+
+```text
+Get one Post with id=1
+```
+
+Django converts these Python operations into SQL internally.
+
+## 12. Serializer
+
+The Serializer is the layer between the API and the Model.
+
+For example, the client sends:
+
+```json
+{
+  "content": "Great article",
+  "author": 1,
+  "post": 2
+}
+```
+
+The Serializer validates this data before saving it.
+
+Example:
+
+```python
+class CommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = "__all__"
+```
+
+The flow is:
+
+```text
+JSON
+↓
+Serializer
+↓
+Validation
+↓
+Model
+```
+
+When returning data:
+
+```text
+Model
+↓
+Serializer
+↓
+JSON
+```
+
+The material describes serializers as the DRF component that converts model/Python objects into API-friendly data and validates incoming JSON.
+
+## 13. Custom Validation
+
+For the Comment API, I added validation so a Comment cannot be created without an author or post.
+
+Example:
+
+```python
+def validate(self, data):
+
+    if not data.get("author"):
+        raise serializers.ValidationError({
+            "author": "This field is required."
+        })
+
+    if not data.get("post"):
+        raise serializers.ValidationError({
+            "post": "This field is required."
+        })
+
+    return data
+```
+
+If the data is valid:
+
+```text
+return data
+```
+
+and the Serializer continues.
+
+If the data is invalid:
+
+```text
+ValidationError
+↓
+400 Bad Request
+```
+
+## 14. View
+
+The View handles the HTTP request and controls what happens next.
+
+Example:
+
+```python
+@api_view(["POST"])
+def comment(request):
+
+    serializer = CommentSerializer(
+        data=request.data
+    )
+
+    if serializer.is_valid():
+        serializer.save()
+
+        return Response(
+            serializer.data,
+            status=201
+        )
+
+    return Response(
+        serializer.errors,
+        status=400
+    )
+```
+
+The logic is:
+
+```text
+request.data
+↓
+Serializer
+↓
+is_valid()
+```
+
+If valid:
+
+```text
+save()
+↓
+Database
+↓
+201 Created
+```
+
+If invalid:
+
+```text
+serializer.errors
+↓
+400 Bad Request
+```
+
+The manual-view pattern is also shown in the course material.
+
+## 15. How the Serializer Class Works in the View
+
+This:
+
+```python
+class CommentSerializer(
+    serializers.ModelSerializer
+):
+```
+
+defines the Serializer class.
+
+Inside the View:
+
+```python
+serializer = CommentSerializer(
+    data=request.data
+)
+```
+
+creates an object, or instance, from that class.
+
+Then:
+
+```python
+serializer.is_valid()
+```
+
+runs the validation.
+
+This includes the custom:
+
+```python
+validate()
+```
+
+method.
+
+If validation passes:
+
+```python
+serializer.save()
+```
+
+saves the object using the Model.
+
+Simple way to remember:
+
+```text
+Class
+= blueprint
+
+CommentSerializer(...)
+= object created from the blueprint
+
+is_valid()
+= run validation
+
+validate()
+= my custom validation rules
+
+save()
+= save through the Model
+```
+
+## 16. ViewSet
+
+Not every View needs to be written manually.
+
+Django REST Framework provides:
+
+```python
+ModelViewSet
+```
+
+Example:
+
+```python
+class PostViewSet(viewsets.ModelViewSet):
+
+    queryset = Post.objects.all()
+
+    serializer_class = PostSerializer
+```
+
+A `ModelViewSet` can provide common CRUD operations such as:
+
+```text
+GET
+POST
+PUT
+PATCH
+DELETE
+```
+
+without writing a separate function for every operation.
+
+The course material explains that a ViewSet groups list, retrieve, create, update, and delete operations into one class.
+
+## 17. Router
+
+A Router works with a ViewSet.
+
+Example:
+
+```python
+router = DefaultRouter()
+
+router.register(
+    'posts',
+    PostViewSet
+)
+```
+
+This can automatically create routes such as:
+
+```text
+GET     /api/posts/
+POST    /api/posts/
+
+GET     /api/posts/1/
+PUT     /api/posts/1/
+DELETE  /api/posts/1/
+```
+
+Simple way to remember:
+
+```text
+ViewSet
+= ready CRUD logic
+
+Router
+= automatically creates URLs for the ViewSet
+```
+
+This matches the material's explanation of ViewSets and Routers.
+
+## 18. Function View vs ViewSet
+
+I use a function-based view such as:
+
+```python
+@api_view(["POST"])
+def comment(request):
+```
+
+when I want more explicit control.
+
+For example:
+
+```text
+custom validation
+business rules
+custom error messages
+custom response logic
+```
+
+I use a ViewSet when the API mainly needs standard CRUD operations and I want less repeated code.
+
+The course notes explain that manual views give more control, while routers and ViewSets are faster for standard CRUD APIs.
+
+## 19. APIs Built in the Project
+
+The project currently has:
+
+```text
+POST /api/users/
+```
+
+Creates a User.
+
+```text
+POST /api/categories/
+```
+
+Creates a Category.
+
+```text
+POST /api/posts/
+```
+
+Creates a Post.
+
+```text
+POST /api/comments/
+```
+
+Creates a Comment.
+
+## 20. HTTP Status Codes
+
+Successful creation:
+
+```text
+201 Created
+```
+
+Invalid input:
+
+```text
+400 Bad Request
+```
+
+Examples:
+
+```text
+duplicate username
+invalid email
+missing required field
+invalid author ID
+invalid post ID
+```
+
+Unexpected internal server problem:
+
+```text
+500 Internal Server Error
+```
+
+## 21. The Whole Project in One Flow
+
+If someone asks me how the project works:
+
+```text
+Client sends request
+↓
+URL finds the View
+↓
+View gives data to Serializer
+↓
+Serializer validates it
+↓
+Model / ORM talks to PostgreSQL
+↓
+Data is saved
+↓
+Serializer prepares response data
+↓
+View returns JSON Response
+```
+
+The easiest way to remember each layer is:
+
+```text
+URL
+= Where should the request go?
+
+View
+= What should happen with the request?
+
+Serializer
+= Is the data valid, and how should it be converted?
+
+Model
+= What does the data look like?
+
+ORM
+= How do I work with the database using Python?
+
+Database
+= Where is the data stored?
+```
