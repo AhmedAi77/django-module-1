@@ -1,4 +1,4 @@
-# Django Blog Project — Technical Revision Notes
+# Django Blog Project 
 
 ## 1. Project Architecture
 
