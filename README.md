@@ -1,415 +1,310 @@
-# Django Blog Project – Simple Review
+# Django Blog Project — Technical Revision Notes
 
-This project is a Blog Backend built with Django and Django REST Framework.
+## 1. Project Architecture
 
-The main idea is:
+Django is a Python web framework used to build backend applications.
+
+Django REST Framework (DRF) extends Django with tools for building REST APIs.
+
+The main request flow is:
 
 ```text
 Client / Postman
        ↓
-URL
+URL Router
        ↓
-View
+API View
        ↓
-Serializer
+Serializer / Service
        ↓
-Model
+Model / ORM
        ↓
-Database
+PostgreSQL Database
 ```
 
-When returning data:
+The exact flow depends on the operation. Creating a user uses a serializer, while summarizing a post uses a service that retrieves database content and communicates with AI.
+
+### Important components
+
+| Component | Responsibility |
+|---|---|
+| `settings.py` | Project configuration |
+| `urls.py` | Maps URLs to views |
+| Model | Defines database structure |
+| ORM | Performs database operations using Python |
+| Serializer | Validates and converts API data |
+| View | Handles HTTP requests and responses |
+| Service | Contains reusable application logic |
+| AI Client | Communicates with the external AI provider |
+
+**Key idea:** Each component should have a clear responsibility.
+
+---
+
+## 2. Django Project Structure
 
 ```text
-Database
-↓
-Model
-↓
-Serializer
-↓
-Response / JSON
+Module1/
+├── manage.py
+├── config/
+│   ├── settings.py
+│   └── urls.py
+└── blog/
+    ├── models/
+    ├── serializers/
+    ├── views/
+    ├── ai_content/
+    │   ├── client.py
+    │   └── service/
+    │       ├── utils.py
+    │       ├── generate.py
+    │       └── summarizer.py
+    └── urls.py
 ```
 
-## 1. Project and App
+`config` contains the project-wide configuration.
 
-I have a Django project called:
+`blog` contains the application functionality.
 
-```text
-config
-```
+`manage.py` is used to execute Django commands such as running the development server, applying migrations, and opening the Django shell.
 
-It contains the main project configuration, such as:
+## 3. URL Routing
 
-```text
-settings.py
-urls.py
-```
+Django uses URL patterns to decide which view handles a request.
 
-I also have an app called:
-
-```text
-blog
-```
-
-The `blog` app contains the main blog logic:
-
-```text
-models
-serializers
-views
-urls
-```
-
-Simple way to remember it:
-
-```text
-config = whole-project configuration
-blog   = blog feature
-```
-
-## 2. settings.py
-
-`settings.py` contains the main Django configuration.
-
-One important section is:
+In `config/urls.py`:
 
 ```python
-INSTALLED_APPS
+path("blog/", include("blog.urls"))
 ```
 
-For example:
+This forwards requests beginning with `/blog/` to the blog application's URLs.
+
+In `blog/urls.py`:
 
 ```python
-'rest_framework',
-'blog',
+path(
+    "posts/<int:post_id>/summarize/",
+    summarize_post_view,
+    name="summarize_post"
+)
 ```
 
-`rest_framework` is needed because we are building REST APIs with Django REST Framework.
-
-The project also connects to PostgreSQL.
-
-Sensitive information such as database passwords should not be written directly inside `settings.py`.
-
-Instead, they can be stored in:
+The full URL becomes:
 
 ```text
-.env
+/blog/posts/3/summarize/
 ```
 
-and loaded using `python-decouple`.
+### Syntax breakdown
 
-## 3. URLs
+- `path()` registers a URL pattern.
+- `<int:post_id>` captures an integer from the URL.
+- `summarize_post_view` identifies the function Django calls.
+- `name=` gives the URL a reusable internal name.
+- `include()` delegates routing to another URL configuration.
 
-There are two URL levels.
-
-The first one is:
-
-```text
-config/urls.py
-```
-
-This is the main router for the whole Django project.
-
-For example:
+Django passes the captured ID to the view:
 
 ```python
-path('api/', include('blog.urls'))
+def summarize_post_view(request, post_id):
 ```
 
-This means:
+**Remember:** The URL determines where the request goes. It does not perform database operations itself.
 
-> If the URL starts with `/api/`, send the remaining part to `blog/urls.py`.
+---
 
-Then inside `blog/urls.py`, I can have:
+## 4. Django Models
 
-```python
-path('users/', create_user)
-```
-
-So the final URL becomes:
-
-```text
-/api/users/
-```
-
-Simple way to remember:
-
-```text
-config/urls.py
-= chooses the app
-
-blog/urls.py
-= chooses the view
-```
-
-## 4. Models
-
-A Model represents data stored in the database.
-
-For example:
+A model is a Python class that describes database records.
 
 ```python
 class Category(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, unique=True)
     description = models.TextField()
 ```
 
-This represents something similar to:
+### Understanding the syntax
 
-```text
-Category table
+`class Category` defines a Python class.
 
-id
-name
-description
-```
+`models.Model` is the Django base class that provides model functionality.
 
-Django handles the SQL for us through the ORM.
+`name` and `description` are model fields.
 
-## 5. Models in the project
+Django uses model definitions and migrations to create database tables.
 
-The project contains:
+### Common fields
 
-```text
-User
-Post
-Category
-Comment
-```
+| Field | Purpose |
+|---|---|
+| `CharField` | Short text |
+| `TextField` | Long text |
+| `EmailField` | Email-format validation |
+| `AutoField` | Automatically generated integer ID |
+| `DateTimeField` | Date and time |
+| `ForeignKey` | Many-to-one relationship |
+| `ManyToManyField` | Many-to-many relationship |
 
-They are organized into separate files:
-
-```text
-blog/models/
-    user.py
-    post.py
-    category.py
-    comment.py
-```
-
-`__init__.py` imports the models so Django can find and use them.
-
-## 6. Common Model Fields
-
-```python
-models.CharField(max_length=100)
-```
-
-Used for short text such as a username or title.
-
-```python
-models.TextField()
-```
-
-Used for longer text such as post content or comments.
-
-```python
-models.EmailField()
-```
-
-Used for email addresses and provides email-format validation.
-
-```python
-models.DateTimeField(auto_now_add=True)
-```
-
-Stores the creation time.
-
-```python
-models.DateTimeField(auto_now=True)
-```
-
-Updates the timestamp whenever the object is saved.
+### Field options
 
 ```python
 unique=True
 ```
 
-Prevents duplicate values.
-
-For example:
-
-```python
-username = models.CharField(
-    max_length=100,
-    unique=True
-)
-```
-
-Two users cannot have the same username.
-
-## 7. ForeignKey Relationships
-
-For example, a Post can have an author:
-
-```python
-author = models.ForeignKey(
-    User,
-    on_delete=models.CASCADE,
-    related_name='posts'
-)
-```
-
-This means:
-
-```text
-One User
-↓
-Many Posts
-```
-
-Each Post points to one User.
-
-`related_name='posts'` allows:
-
-```python
-user.posts.all()
-```
-
-which returns the user's posts.
-
-`on_delete=models.CASCADE` means related objects can be deleted when the referenced object is deleted.
-
-For example, deleting a Post can delete its related Comments if the Comment uses `CASCADE`.
-
-## 8. ManyToMany Relationship
-
-A Post can belong to several Categories.
-
-For example:
-
-```python
-categories = models.ManyToManyField(
-    Category,
-    related_name='posts',
-    blank=True
-)
-```
-
-This means:
-
-```text
-One Post
-→ Many Categories
-
-One Category
-→ Many Posts
-```
-
-Example:
-
-```text
-Post: Django REST Framework
-
-Categories:
-Python
-Backend
-Technology
-```
-
-Django creates an intermediate relationship table automatically.
-
-## 9. blank=True and null=True
+Prevents duplicate values at the database level.
 
 ```python
 blank=True
 ```
 
-Means the field can be empty during validation or in forms.
+Allows empty values during Django validation.
 
 ```python
 null=True
 ```
 
-Means the database is allowed to store:
+Allows the database to store `NULL`.
 
-```text
-NULL
+```python
+auto_now_add=True
 ```
 
-For a ManyToManyField, normally `blank=True` is enough. `null=True` is not needed.
+Sets the creation timestamp.
 
-## 10. Migrations
-
-When I change a Model, the database does not change automatically.
-
-First:
-
-```bash
-python manage.py makemigrations
+```python
+auto_now=True
 ```
 
-This creates migration instructions.
+Updates the timestamp when the object is saved.
 
-Then:
+---
 
-```bash
-python manage.py migrate
+## 5. Model Relationships
+
+### ForeignKey — One-to-many
+
+```python
+author = models.ForeignKey(
+    User,
+    on_delete=models.CASCADE,
+    related_name="posts"
+)
 ```
 
-This applies those changes to the database.
+One user can write many posts. Each post references one user.
 
-The flow is:
+`on_delete=models.CASCADE` tells Django to delete related posts when their referenced user is deleted.
 
-```text
-Model change
-↓
-makemigrations
-↓
-Migration file
-↓
-migrate
-↓
-Database change
+`related_name="posts"` allows reverse access:
+
+```python
+user.posts.all()
 ```
 
-This matches the course material, which explains migrations as the safe way to apply model/schema changes to the database.
+This retrieves the user's posts.
 
-## 11. Django ORM
+### ManyToManyField — Many-to-many
 
-The Django ORM lets me work with the database using Python instead of writing SQL directly.
+```python
+category = models.ManyToManyField(
+    Category,
+    related_name="posts",
+    blank=True
+)
+```
 
-For example:
+A post may belong to several categories, and one category may be linked to several posts.
+
+Django manages the relationship through an intermediate table.
+
+### Comments
+
+Comments use ForeignKey relationships to connect to their author and post.
+
+This supports:
+
+```python
+post.comments.all()
+```
+
+which retrieves comments related to a post.
+
+---
+
+## 6. Django ORM
+
+ORM stands for **Object-Relational Mapper**.
+
+It allows Python code to interact with database records without writing SQL manually.
+
+Examples:
 
 ```python
 Post.objects.all()
 ```
 
-means:
-
-```text
-Get all Posts
-```
-
-And:
+Returns a QuerySet representing all posts.
 
 ```python
-Post.objects.get(id=1)
+Post.objects.get(pk=3)
 ```
 
-means:
+Retrieves one post whose primary key is `3`.
 
-```text
-Get one Post with id=1
+```python
+Post.objects.filter(author=1)
 ```
 
-Django converts these Python operations into SQL internally.
+Returns posts matching the specified author.
 
-## 12. Serializer
+### Understanding `Post.objects.get(pk=post_id)`
 
-The Serializer is the layer between the API and the Model.
+- `Post` is the model class.
+- `.objects` is the Django model manager.
+- `.get()` retrieves one matching object.
+- `pk` represents the primary key field.
+- `post_id` is the value used for the lookup.
 
-For example, the client sends:
+If the record does not exist, Django raises:
 
-```json
-{
-  "content": "Great article",
-  "author": 1,
-  "post": 2
-}
+```python
+Post.DoesNotExist
 ```
 
-The Serializer validates this data before saving it.
+A service can catch that exception and raise a clearer application error.
+
+---
+
+## 7. Migrations
+
+Models describe the desired database structure, but editing a model does not immediately update the database.
+
+Two commands are used:
+
+```bash
+python manage.py makemigrations
+```
+
+Creates migration files describing model changes.
+
+```bash
+python manage.py migrate
+```
+
+Applies pending migrations to the database.
+
+### Important distinction
+
+Creating an ordinary database record through an API does not require a new migration.
+
+Changing the model schema generally does.
+
+---
+
+## 8. Serializers
+
+Serializers provide validation and data conversion for APIs.
 
 Example:
 
@@ -420,385 +315,568 @@ class CommentSerializer(serializers.ModelSerializer):
         fields = "__all__"
 ```
 
-The flow is:
+`ModelSerializer` automatically creates serializer fields based on the model.
 
-```text
-JSON
-↓
-Serializer
-↓
-Validation
-↓
-Model
-```
+`class Meta` contains configuration for the serializer.
 
-When returning data:
+`fields = "__all__"` means all model fields are included.
 
-```text
-Model
-↓
-Serializer
-↓
-JSON
-```
-
-The material describes serializers as the DRF component that converts model/Python objects into API-friendly data and validates incoming JSON.
-
-## 13. Custom Validation
-
-For the Comment API, I added validation so a Comment cannot be created without an author or post.
-
-Example:
+### Input validation
 
 ```python
-def validate(self, data):
-
-    if not data.get("author"):
-        raise serializers.ValidationError({
-            "author": "This field is required."
-        })
-
-    if not data.get("post"):
-        raise serializers.ValidationError({
-            "post": "This field is required."
-        })
-
-    return data
+serializer = CommentSerializer(data=request.data)
 ```
 
-If the data is valid:
-
-```text
-return data
-```
-
-and the Serializer continues.
-
-If the data is invalid:
-
-```text
-ValidationError
-↓
-400 Bad Request
-```
-
-## 14. View
-
-The View handles the HTTP request and controls what happens next.
-
-Example:
-
-```python
-@api_view(["POST"])
-def comment(request):
-
-    serializer = CommentSerializer(
-        data=request.data
-    )
-
-    if serializer.is_valid():
-        serializer.save()
-
-        return Response(
-            serializer.data,
-            status=201
-        )
-
-    return Response(
-        serializer.errors,
-        status=400
-    )
-```
-
-The logic is:
-
-```text
-request.data
-↓
-Serializer
-↓
-is_valid()
-```
-
-If valid:
-
-```text
-save()
-↓
-Database
-↓
-201 Created
-```
-
-If invalid:
-
-```text
-serializer.errors
-↓
-400 Bad Request
-```
-
-The manual-view pattern is also shown in the course material.
-
-## 15. How the Serializer Class Works in the View
-
-This:
-
-```python
-class CommentSerializer(
-    serializers.ModelSerializer
-):
-```
-
-defines the Serializer class.
-
-Inside the View:
-
-```python
-serializer = CommentSerializer(
-    data=request.data
-)
-```
-
-creates an object, or instance, from that class.
-
-Then:
+Creates a serializer instance containing incoming request data.
 
 ```python
 serializer.is_valid()
 ```
 
-runs the validation.
-
-This includes the custom:
-
-```python
-validate()
-```
-
-method.
-
-If validation passes:
+Runs validation.
 
 ```python
 serializer.save()
 ```
 
-saves the object using the Model.
-
-Simple way to remember:
-
-```text
-Class
-= blueprint
-
-CommentSerializer(...)
-= object created from the blueprint
-
-is_valid()
-= run validation
-
-validate()
-= my custom validation rules
-
-save()
-= save through the Model
-```
-
-## 16. ViewSet
-
-Not every View needs to be written manually.
-
-Django REST Framework provides:
+Creates or updates the model instance using validated data.
 
 ```python
-ModelViewSet
+serializer.data
 ```
 
-Example:
+Provides the serialized output representation.
 
 ```python
-class PostViewSet(viewsets.ModelViewSet):
-
-    queryset = Post.objects.all()
-
-    serializer_class = PostSerializer
+serializer.errors
 ```
 
-A `ModelViewSet` can provide common CRUD operations such as:
+Contains validation errors.
 
-```text
-GET
-POST
-PUT
-PATCH
-DELETE
-```
-
-without writing a separate function for every operation.
-
-The course material explains that a ViewSet groups list, retrieve, create, update, and delete operations into one class.
-
-## 17. Router
-
-A Router works with a ViewSet.
-
-Example:
+### Custom validation
 
 ```python
-router = DefaultRouter()
+def validate(self, attrs):
+    if not attrs.get("author"):
+        raise serializers.ValidationError({
+            "author": "This field is required."
+        })
 
-router.register(
-    'posts',
-    PostViewSet
-)
+    return attrs
 ```
 
-This can automatically create routes such as:
+`validate()` runs object-level validation.
 
-```text
-GET     /api/posts/
-POST    /api/posts/
+`attrs` contains values that have already passed field-level validation.
 
-GET     /api/posts/1/
-PUT     /api/posts/1/
-DELETE  /api/posts/1/
-```
+`raise` stops normal execution and signals an error.
 
-Simple way to remember:
+---
 
-```text
-ViewSet
-= ready CRUD logic
+## 9. Django REST Framework Views
 
-Router
-= automatically creates URLs for the ViewSet
-```
-
-This matches the material's explanation of ViewSets and Routers.
-
-## 18. Function View vs ViewSet
-
-I use a function-based view such as:
+Views handle incoming HTTP requests.
 
 ```python
 @api_view(["POST"])
-def comment(request):
+def create_user(request):
+    serializer = UserSerializer(data=request.data)
+
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=201)
+
+    return Response(serializer.errors, status=400)
 ```
 
-when I want more explicit control.
+### Syntax explanation
 
-For example:
+`@api_view(["POST"])` is a decorator. It makes the function a DRF view that accepts POST requests.
+
+`request.data` contains parsed request content.
+
+`Response()` builds the HTTP response.
+
+`status=201` indicates successful creation.
+
+`status=400` indicates invalid input.
+
+### HTTP methods
+
+| Method | Purpose |
+|---|---|
+| GET | Retrieve |
+| POST | Create or trigger processing |
+| PUT | Full update |
+| PATCH | Partial update |
+| DELETE | Delete |
+
+---
+
+## 10. ViewSets and Routers
+
+DRF provides `ModelViewSet` to implement standard CRUD operations.
+
+```python
+class PostViewSet(viewsets.ModelViewSet):
+    queryset = Post.objects.all()
+    serializer_class = PostSerializer
+```
+
+`queryset` identifies the records available through the ViewSet.
+
+`serializer_class` specifies the serializer used for input and output.
+
+A router creates standard URLs:
+
+```python
+router = DefaultRouter()
+router.register("posts", PostViewSet)
+```
+
+This supports endpoints such as:
 
 ```text
-custom validation
-business rules
-custom error messages
-custom response logic
+GET    /blog/posts/
+POST   /blog/posts/
+GET    /blog/posts/3/
+PATCH  /blog/posts/3/
+DELETE /blog/posts/3/
 ```
 
-I use a ViewSet when the API mainly needs standard CRUD operations and I want less repeated code.
+A manual API view provides more control over custom operations. A ViewSet reduces repetitive code for standard CRUD.
 
-The course notes explain that manual views give more control, while routers and ViewSets are faster for standard CRUD APIs.
+---
 
-## 19. APIs Built in the Project
+## 11. Python Syntax Used in the Project
 
-The project currently has:
+### Function parameters and return types
+
+```python
+def summarize_post(post_id: int) -> dict:
+```
+
+- `def` defines a function.
+- `post_id` is a parameter.
+- `: int` is a type hint.
+- `-> dict` describes the expected return type.
+- `:` starts the function body.
+
+Python does not automatically enforce these type hints.
+
+### Default arguments
+
+```python
+def generate(self, prompt, system=None):
+```
+
+`system=None` makes the argument optional.
+
+### Dictionary access
+
+```python
+post_id = request.data.get("post_id")
+```
+
+`.get()` retrieves the value associated with a dictionary key, returning `None` when the key is missing unless another default is specified.
+
+### Strings
+
+```python
+prompt = f"Summarize this post:\n{content}"
+```
+
+`f` creates a formatted string.
+
+`{content}` inserts the variable's value.
+
+`\n` creates a new line.
+
+### Exceptions
+
+```python
+try:
+    post = Post.objects.get(pk=post_id)
+except Post.DoesNotExist:
+    raise ValueError("Post not found.")
+```
+
+`try` runs code that may fail.
+
+`except` catches a specified exception.
+
+`raise` raises an exception.
+
+### Cleaning strings
+
+```python
+summary.strip()
+```
+
+Returns a new string without leading or trailing whitespace.
+
+It does not modify the original string unless the result is assigned.
+
+### Checking empty values
+
+```python
+if not summary or not summary.strip():
+    raise ValueError("Summary is empty.")
+```
+
+The first condition checks for an empty or missing value.
+
+The second detects whitespace-only strings.
+
+`or` means either condition can trigger the error.
+
+---
+
+## 12. AI Client — OpenAI Integration
+
+The AI client is responsible for communicating with OpenAI.
+
+```python
+class ContentClient:
+    def __init__(self):
+        self.client = OpenAI(
+            api_key=settings.OPENAI_APIKEY
+        )
+
+    def generate(self, prompt, system=None):
+        messages = []
+
+        if system:
+            messages.append({
+                "role": "system",
+                "content": system
+            })
+
+        messages.append({
+            "role": "user",
+            "content": prompt
+        })
+
+        response = self.client.chat.completions.create(
+            model=settings.OPENAI_MODEL,
+            messages=messages
+        )
+
+        return response.choices[0].message.content
+```
+
+### Important concepts
+
+`__init__()` is called when a new instance is created.
+
+`self` refers to that instance.
+
+`self.client` stores the configured OpenAI client.
+
+`messages` is a list of dictionaries describing the conversation sent to the model.
+
+`chat.completions.create()` sends the request.
+
+`response.choices[0].message.content` extracts the generated text from the first returned choice.
+
+### Why use one shared client?
+
+The same `ContentClient` can support several AI features.
+
+The client handles communication, while each service decides what task the AI should perform.
+
+---
+
+## 13. AI Blog Generator
+
+The generator takes a title and optional tone, then creates new content.
+
+```python
+def _build_generate_prompt(title: str, tone: str = None) -> str:
+    prompt = f"Write a short blog post about {title}."
+
+    if tone:
+        prompt += f"\nWrite it in a {tone} tone."
+
+    return prompt
+```
+
+The generator service:
+
+1. Validates the title.
+2. Builds the generation prompt.
+3. Calls the AI utility.
+4. Cleans the generated content.
+5. Enforces the configured output length.
+6. Returns structured data.
+
+The generator does not need to retrieve an existing post.
+
+---
+
+## 14. AI Blog Summarizer
+
+The summarizer works differently: it receives an existing `post_id` and summarizes the content saved in PostgreSQL.
+
+### Service workflow
 
 ```text
-POST /api/users/
+post_id
+   ↓
+Validate positive integer
+   ↓
+Retrieve Post using ORM
+   ↓
+Validate post.content
+   ↓
+Build summary prompt
+   ↓
+ContentClient.generate(prompt)
+   ↓
+Validate AI response
+   ↓
+Return dictionary
 ```
 
-Creates a User.
+### Input validation
+
+```python
+if type(post_id) is not int or post_id <= 0:
+    raise ValueError("Post ID must be a positive integer.")
+```
+
+The ID must be a positive integer.
+
+### Database retrieval
+
+```python
+try:
+    post = Post.objects.get(pk=post_id)
+except Post.DoesNotExist:
+    raise ValueError("Post not found.")
+```
+
+The service retrieves an existing post and converts the database lookup failure into an application-level error.
+
+### Content validation
+
+```python
+cleaned_content = validate_text_input(
+    post.content,
+    min_length=20,
+    field_name="Content"
+)
+
+if len(cleaned_content) > 500:
+    raise ValueError(
+        "Post content must not exceed 500 characters."
+    )
+```
+
+The original post content must contain between 20 and 500 characters after cleaning.
+
+### AI processing
+
+```python
+prompt = summarize_builder(cleaned_content)
+
+client = ContentClient()
+summary = client.generate(prompt)
+```
+
+The prompt builder creates the instructions.
+
+The AI client sends the instructions to OpenAI.
+
+### Output validation
+
+```python
+if not summary or not summary.strip():
+    raise ValueError("Summary is empty.")
+```
+
+The response must contain meaningful text.
+
+### Dictionary result
+
+```python
+summary = summary.strip()
+
+return {
+    "post_id": post_id,
+    "summary": summary,
+    "length": len(summary)
+}
+```
+
+The service returns a normal Python dictionary, not an HTTP response.
+
+---
+
+## 15. AI Summarizer API Endpoint
+
+Endpoint:
+
+```http
+POST /blog/posts/3/summarize/
+```
+
+The URL contains `post_id=3`.
+
+The API View receives that ID and passes it to the service:
+
+```python
+@api_view(["POST"])
+def summarize_post_view(request, post_id):
+    try:
+        result = summarize_post(post_id)
+        return Response(result, status=200)
+
+    except ValueError as exc:
+        if str(exc) == "Post not found.":
+            return Response(
+                {"error": str(exc)},
+                status=404
+            )
+
+        return Response(
+            {"error": str(exc)},
+            status=400
+        )
+```
+
+The View does not retrieve the post directly or call OpenAI itself.
+
+This keeps the service reusable from the Django shell or other Python code.
+
+### Expected responses
+
+| Situation | HTTP status |
+|---|---|
+| Summary generated | 200 OK |
+| Invalid content | 400 Bad Request |
+| Post doesn't exist | 404 Not Found |
+| Unsupported HTTP method | 405 Method Not Allowed |
+
+The AI service does not save the summary to a database table. Summary storage was outside the task's scope.
+
+---
+
+## 16. Logging and Debugging
+
+Python's `logging` module records diagnostic information.
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+```
+
+`__name__` identifies the current Python module.
+
+Example:
+
+```python
+try:
+    summary = client.generate(prompt)
+except Exception:
+    logger.exception(
+        "Failed to summarize post %s",
+        post_id
+    )
+    raise
+```
+
+`logger.exception()` records the error and traceback.
+
+The final `raise` re-raises the original exception.
+
+This is useful when an external AI request fails, such as an authentication error.
+
+---
+
+## 17. Testing
+
+### Test creating a post
+
+```http
+POST /blog/posts/
+```
+
+A successful creation generally returns `201 Created`.
+
+### Test summarization
+
+```http
+POST /blog/posts/3/summarize/
+```
+
+No JSON body is required because the ID is already in the URL.
+
+A valid request returns a generated summary and its character length.
+
+### Test error handling
+
+Check these conditions:
+
+- Negative or zero post ID.
+- Nonexistent post ID.
+- Content shorter than 20 characters.
+- Content longer than 500 characters.
+- Empty AI response.
+- Invalid AI credentials.
+
+Not every test needs a real OpenAI request. Validation and API behavior can also be tested with mocked AI responses.
+
+---
+
+## 18. Quick Reference
+
+| Concept | Remember |
+|---|---|
+| Model | Defines database structure |
+| ORM | Queries the database with Python |
+| Migration | Applies schema changes |
+| Serializer | Validates and converts API data |
+| View | Handles HTTP requests and responses |
+| Service | Contains reusable application logic |
+| Client | Communicates with an external API |
+| `self` | Current class instance |
+| `__init__()` | Initializes an instance |
+| `__name__` | Current module name |
+| `.get()` | Retrieves a value or record, depending on the object |
+| `.strip()` | Removes surrounding whitespace |
+| `raise` | Raises an exception |
+| `try/except` | Handles exceptions |
+| `return` | Sends a value back to the caller |
+| `-> dict` | Expected dictionary return type |
+
+## Final Mental Model
+
+For a regular CRUD API:
 
 ```text
-POST /api/categories/
+Request → URL → View → Serializer → Model / ORM → Database
 ```
 
-Creates a Category.
+For your AI summarizer:
 
 ```text
-POST /api/posts/
+Request → URL → View → Service
+                          ↓
+                     Database
+                          ↓
+                     Validation
+                          ↓
+                     Prompt Builder
+                          ↓
+                     ContentClient
+                          ↓
+                       OpenAI
+                          ↓
+                     Dictionary
+                          ↓
+                     View → JSON
 ```
 
-Creates a Post.
-
-```text
-POST /api/comments/
-```
-
-Creates a Comment.
-
-## 20. HTTP Status Codes
-
-Successful creation:
-
-```text
-201 Created
-```
-
-Invalid input:
-
-```text
-400 Bad Request
-```
-
-Examples:
-
-```text
-duplicate username
-invalid email
-missing required field
-invalid author ID
-invalid post ID
-```
-
-Unexpected internal server problem:
-
-```text
-500 Internal Server Error
-```
-
-## 21. The Whole Project in One Flow
-
-If someone asks me how the project works:
-
-```text
-Client sends request
-↓
-URL finds the View
-↓
-View gives data to Serializer
-↓
-Serializer validates it
-↓
-Model / ORM talks to PostgreSQL
-↓
-Data is saved
-↓
-Serializer prepares response data
-↓
-View returns JSON Response
-```
-
-The easiest way to remember each layer is:
-
-```text
-URL
-= Where should the request go?
-
-View
-= What should happen with the request?
-
-Serializer
-= Is the data valid, and how should it be converted?
-
-Model
-= What does the data look like?
-
-ORM
-= How do I work with the database using Python?
-
-Database
-= Where is the data stored?
-```
+**The most important skill is understanding where each responsibility belongs and how data moves between functions, classes, and layers.**
